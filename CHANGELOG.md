@@ -1,8 +1,14 @@
+yasio-4.2.2
+
+  1. Fix c++23 deprecated std::aligned_storage warning
+  2. Ensure WSAStartup before initializing user static variables
+  
+  
 yasio-4.2.1
 
   1. Fix #441 socket.bind always fail with EPERM when runs on macos in code signing sandbox mode
-
-
+  
+  
 yasio-4.2.0
 
   1. Improve kcp implementation
