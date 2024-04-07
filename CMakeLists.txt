@@ -180,10 +180,10 @@ elseif(YASIO_SSL_BACKEND EQUAL 2) # mbedtls
         set(MBEDTLS_VER "2.28.7")
         message(AUTHOR_WARNING "Using mbedtls ${MBEDTLS_VER} for vs2013 happy")
     else()
-        set(MBEDTLS_VER "3.5.2")
+        set(MBEDTLS_VER "3.6.0")
     endif()
     if (PWSH_COMMAND)
-        _1kadd_pkg("gh:Mbed-TLS/mbedtls#${MBEDTLS_VER}" OPTIONS "MBEDTLS_FATAL_WARNINGS OFF")
+        _1kadd_pkg("gh:Mbed-TLS/mbedtls#v${MBEDTLS_VER}" OPTIONS "MBEDTLS_FATAL_WARNINGS OFF")
     else()
         include(1k/CPM.cmake)
         CPMAddPackage(
