@@ -106,7 +106,7 @@ yasio提供了如下可在C++11编译器下使用的C++14/17/20标准库组件�
 ## 关于 OpenSSL 预编译库 (Windows)
 
 yasio 的 cmake 脚本默认选择 OpenSSL 作为 SSL 支持库，并且会自动从[1kiss](https://github.com/simdsoft/1kiss)下载， 
-且预编译库使用 `VS2022(MSVC-14.37)` 编译，如果你的系统未安装该版本，请传入 CMake 参数`-DYASIO_SSL_BACKEND=2`，例如使用项目
+且预编译库使用 `VS2022(MSVC-14.39)` 编译，如果你的系统未安装该版本，请传入 CMake 参数`-DYASIO_SSL_BACKEND=2`，例如使用项目
 提供的跨平台一键编译脚本 `build.ps1`
 
 ```bat
