@@ -1,3 +1,10 @@
+yasio-4.2.3
+
+  1. Update llvm to 17.0.6 for msvc14.40 support
+  2. Remove logging duplicate new line
+  3. Fix compile error on llvm-19
+  
+  
 yasio-4.2.2
 
   1. Fix c++23 deprecated std::aligned_storage warning
