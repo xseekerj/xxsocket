@@ -407,13 +407,6 @@ if(CARES_INCLUDE_DIR AND YASIO_USE_CARES)
    target_link_libraries(${yasio_target_name} c-ares)
 endif()
 
-if (BUILD_SHARED_LIBS AND ANDROID)
-    message(STATUS "CMAKE_STRIP=${CMAKE_STRIP}")
-    add_custom_command(TARGET ${yasio_target_name} POST_BUILD
-        COMMAND mkdir -p ${PROJECT_BINARY_DIR}/stripped && ${CMAKE_STRIP} ${PROJECT_BINARY_DIR}/libyasio.so -o ${PROJECT_BINARY_DIR}/stripped/libyasio.so
-    )
-endif()
-
 # lua
 if(YASIO_ENABLE_LUA)
     find_package(Lua "5.1.0")
