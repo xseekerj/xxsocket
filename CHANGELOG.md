@@ -1,3 +1,9 @@
+yasio-4.2.4
+
+  1. Fix yasio_ni
+  2. Improve ohos support
+
+
 yasio-4.2.3
 
   1. Update llvm to 17.0.6 for msvc14.40 support

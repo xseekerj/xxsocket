@@ -38,7 +38,11 @@ option(YASIO_ENABLE_LUA "Build yasio with lua support" OFF)
 option(YASIO_ENABLE_AXLUA "Build yasio with axmol-lua support" OFF)
 option(YASIO_ENABLE_NI "Build yasio with native interface for interop" OFF)
 option(YASIO_ENABLE_KCP "Enable kcp support" OFF)
-option(YASIO_NO_DEPS "Build yasio without deps" OFF)
+if (NOT OHOS)
+    option(YASIO_NO_DEPS "Build yasio without deps" OFF)
+else()
+    set(YASIO_NO_DEPS ON) # disable 3rd deps for ohos
+endif()
 
 set_property(GLOBAL PROPERTY USE_FOLDERS ON)
 

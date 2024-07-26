@@ -11,7 +11,7 @@
     
 **[English](README_EN.md)**
   
-**yasio** 是一个轻量级跨平台的异步网络库，专注于客户端和基于各种游戏引擎的游戏客户端网络服务， 支持 windows、macos、ios、android、linux、freebsd 以及其他类 unix 操作系统。  
+**yasio** 是一个轻量级跨平台的异步网络库，专注于客户端和基于各种游戏引擎的游戏客户端网络服务， 支持 windows、macos、ios、android、ohos、linux、freebsd 以及其他类 unix 操作系统。  
 
 ## 支持平台
 
