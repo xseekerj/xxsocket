@@ -205,7 +205,7 @@ $manifest = @{
     cmake        = '3.23.0+';
     ninja        = '1.10.0+';
     python       = '3.8.0+';
-    jdk          = '11.0.23+';
+    jdk          = '17.0.10+'; # jdk17+ works for android cmdlinetools 7.0+
     emsdk        = '3.1.53+';
     cmdlinetools = '7.0+'; # android cmdlinetools
 }
@@ -225,7 +225,7 @@ $cmake_generators = @{
 $channels = @{}
 
 # refer to: https://developer.android.com/studio#command-line-tools-only
-$cmdlinetools_rev = '11076708'
+$cmdlinetools_rev = '11076708' # 12.0
 
 $android_sdk_tools = @{
     'build-tools' = '34.0.0'
@@ -567,29 +567,31 @@ function find_prog($name, $path = $null, $mode = 'ONLY', $cmd = $null, $params =
 
     # try get match expr and preferred ver
     $checkVerCond = $null
-    $requiredMin = ''
+    $minimalVer = ''
     $preferredVer = ''
     $requiredVer = $manifest[$name]
     if ($requiredVer) {
         $preferredVer = $null
-        if ($requiredVer.EndsWith('+')) {
-            $preferredVer = $requiredVer.TrimEnd('+')
-            $checkVerCond = '$(version_ge $foundVer $preferredVer)'
-        }
-        elseif ($requiredVer -eq '*') {
+        if ($requiredVer -eq '*') {
             $checkVerCond = '$True'
             $preferredVer = 'latest'
         }
         else {
             $verArr = $requiredVer.Split('~')
             $isRange = $verArr.Count -gt 1
+            $minimalVer = $verArr[0]
             $preferredVer = $verArr[$isRange]
-            if ($isRange -gt 1) {
-                $requiredMin = $verArr[0]
-                $checkVerCond = '$(version_in_range $foundVer $requiredMin $preferredVer)'
-            }
-            else {
-                $checkVerCond = '$(version_eq $foundVer $preferredVer)'
+            if ($preferredVer.EndsWith('+')) {
+                $preferredVer = $preferredVer.TrimEnd('+')
+                if ($minimalVer.EndsWith('+')) { $minimalVer = $minimalVer.TrimEnd('+') }
+                $checkVerCond = '$(version_ge $foundVer $minimalVer)'
+            } else {
+                if ($isRange) {
+                    $checkVerCond = '$(version_in_range $foundVer $minimalVer $preferredVer)'
+                }
+                else {
+                    $checkVerCond = '$(version_eq $foundVer $preferredVer)'
+                }
             }
         }
         if (!$checkVerCond) {
@@ -623,7 +625,7 @@ function find_prog($name, $path = $null, $mode = 'ONLY', $cmd = $null, $params =
         else {
             $foundVer = "$($cmd_info.Version)"
         }
-        [void]$requiredMin
+        [void]$minimalVer
         if ($checkVerCond) {
             $matched = Invoke-Expression $checkVerCond
             if ($matched) {
@@ -1662,33 +1664,6 @@ if (!$setupOnly) {
 
         # determine generator, build_dir, inst_dir for non gradlew projects
         if (!$is_gradlew) {
-            if (!$cmake_generator -and !$TARGET_OS.StartsWith('win')) {
-                $cmake_generator = $cmake_generators[$TARGET_OS]
-                if ($null -eq $cmake_generator) {
-                    $cmake_generator = if (!$IsWin) { 'Unix Makefiles' } else { 'Ninja' }
-                }
-            }
-
-            if ($cmake_generator) {
-                $using_ninja = $cmake_generator.StartsWith('Ninja')
-
-                if (!$is_wasm) {
-                    $CONFIG_ALL_OPTIONS += '-G', $cmake_generator
-                }
-
-                if ($cmake_generator -eq 'Unix Makefiles' -or $using_ninja) {
-                    $CONFIG_ALL_OPTIONS += "-DCMAKE_BUILD_TYPE=$optimize_flag"
-                }
-
-                if ($using_ninja -and $Global:is_android) {
-                    $CONFIG_ALL_OPTIONS += "-DCMAKE_MAKE_PROGRAM=$ninja_prog"
-                }
-
-                if ($cmake_generator -eq 'Xcode') {
-                    setup_xcode
-                }
-            }
-
             $INST_DIR = $null
             $xopt_presets = 0
             $xprefix_optname = '-DCMAKE_INSTALL_PREFIX='
@@ -1714,12 +1689,48 @@ if (!$setupOnly) {
                     }
                     ++$xopt_presets
                 }
+                elseif ($opt.startsWith('-G')) {
+                    if ($opt.Length -gt 2) {
+                        $cmake_generator = $opt.Substring(2).Trim()
+                    }
+                    elseif (++$opti -lt $xopts.Count) {
+                        $cmake_generator = $xopts[$opti]
+                    }
+                    ++$xopt_presets
+                }
                 elseif ($opt.StartsWith($xprefix_optname)) {
                     ++$xopt_presets
                     $INST_DIR = $opt.SubString($xprefix_optname.Length)
                 }
                 else {
                     $evaluated_xopts += $opt
+                }
+            }
+
+            if (!$cmake_generator -and !$TARGET_OS.StartsWith('win')) {
+                $cmake_generator = $cmake_generators[$TARGET_OS]
+                if ($null -eq $cmake_generator) {
+                    $cmake_generator = if (!$IsWin) { 'Unix Makefiles' } else { 'Ninja' }
+                }
+            }
+
+            if ($cmake_generator) {
+                $using_ninja = $cmake_generator.StartsWith('Ninja')
+
+                if (!$is_wasm) {
+                    $CONFIG_ALL_OPTIONS += '-G', $cmake_generator
+                }
+
+                if ($cmake_generator -eq 'Unix Makefiles' -or $using_ninja) {
+                    $CONFIG_ALL_OPTIONS += "-DCMAKE_BUILD_TYPE=$optimize_flag"
+                }
+
+                if ($using_ninja -and $Global:is_android) {
+                    $CONFIG_ALL_OPTIONS += "-DCMAKE_MAKE_PROGRAM=$ninja_prog"
+                }
+
+                if ($cmake_generator -eq 'Xcode') {
+                    setup_xcode
                 }
             }
 

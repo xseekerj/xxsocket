@@ -4,7 +4,7 @@ param(
 $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
 $vs_installs = ConvertFrom-Json "$(&$vswhere -version '17.0' -format 'json')"
 $vs_installs
-$vs_installer = 'C:\Program Files (x86)\Microsoft Visual Studio\Installer\setup.exe'
+$vs_installer = '${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\setup.exe'
 $vs_path = $vs_installs[0].installationPath
 $msvc_comp_id = "Microsoft.VisualStudio.Component.VC.$ver.17.9.x86.x64" # refer to: https://learn.microsoft.com/en-us/visualstudio/install/workload-component-id-vs-build-tools?view=vs-2022
 echo "Installing $msvc_comp_id ..."
