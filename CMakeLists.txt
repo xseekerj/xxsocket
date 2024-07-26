@@ -142,11 +142,14 @@ endif()
 
 set (YASIO_USE_PREBUILT_LUA FALSE)
 
-if (ANDROID)
-    if (NOT THIRDPART_LIB)
-        set(THIRDPART_LIB "-llog")
-    else()
-        set(THIRDPART_LIB "${THIRDPART_LIB} -llog")
+if(WIN32)
+    set(YASIO_EXTERN_LIBS "ws2_32")
+else()
+    set(YASIO_EXTERN_LIBS "m")
+    if (ANDROID)
+        list(APPEND YASIO_EXTERN_LIBS "log")
+    elseif(OHOS)
+        list(APPEND YASIO_EXTERN_LIBS "hilog_ndk.z")
     endif()
 endif()
 
@@ -206,44 +209,33 @@ if (YASIO_USE_CARES)
 endif()
 
 ### The yasio core library project
-file(GLOB YASIO_CORE yasio/*.hpp;yasio/*.cpp;yasio/compiler/*.hpp;yasio/impl/*.hpp;)
+file(GLOB YASIO_SOURCES yasio/*.hpp;yasio/*.cpp;yasio/compiler/*.hpp;yasio/impl/*.hpp)
 
 if (YASIO_ENABLE_KCP)
   if (NOT kcp_SOURCE_DIR)
-      set(YASIO_CORE ${YASIO_CORE} 
-        ${PROJECT_SOURCE_DIR}/3rdparty/kcp/ikcp.c
-      )
+      list(APPEND YASIO_SOURCES ${PROJECT_SOURCE_DIR}/3rdparty/kcp/ikcp.c)
       list(APPEND YASIO_INC_DIRS  "${PROJECT_SOURCE_DIR}/3rdparty/kcp")
   else()
-      list(APPEND THIRDPART_LIB "kcp")
+      list(APPEND YASIO_EXTERN_LIBS "kcp")
   endif()
 endif()
 if (YASIO_ENABLE_NI)
-  set(YASIO_CORE ${YASIO_CORE} 
-    yasio/bindings/yasio_ni.cpp
-  )
+    list(APPEND YASIO_SOURCES yasio/bindings/yasio_ni.cpp)
 endif()
 
 if (YASIO_ENABLE_LUA)
-  set(YASIO_CORE ${YASIO_CORE} 
-    yasio/bindings/lyasio.cpp
-  )
-  
-  if(YASIO_ENABLE_AXLUA)
-      set(YASIO_CORE ${YASIO_CORE} 
-        yasio/bindings/yasio_axlua.cpp
-      )
-  endif()
+    list(APPEND YASIO_SOURCES yasio/bindings/lyasio.cpp)
+    if(YASIO_ENABLE_AXLUA)
+      list(APPEND YASIO_SOURCES yasio/bindings/yasio_axlua.cpp)
+    endif()
 endif()
 
 if(ANDROID AND CARES_INCLUDE_DIR)
-  set(YASIO_CORE ${YASIO_CORE} 
-    yasio/platform/yasio_jni.cpp
-  )
+    list(APPEND YASIO_SOURCES yasio/platform/yasio_jni.cpp)
 endif()
 
 if(WIN32 AND YASIO_ENABLE_HPERF_IO)
-  set(THIRDPART_SRC 3rdparty/wepoll/wepoll.c)
+    list(APPEND YASIO_SOURCES 3rdparty/wepoll/wepoll.c)
 endif()
 
 if(YASIO_ENABLE_KCP)
@@ -267,55 +259,30 @@ macro(source_group_by_dir proj_dir source_files)
     endif(MSVC OR APPLE)
 endmacro(source_group_by_dir)
 
-source_group_by_dir(${CMAKE_CURRENT_SOURCE_DIR} YASIO_CORE)
+source_group_by_dir(${CMAKE_CURRENT_SOURCE_DIR} YASIO_SOURCES)
 
 # --- add yasio core lib project
 if (APPLE)
     if (IOS)
         # set(CMAKE_OSX_ARCHITECTURES "$(ARCHS_STANDARD)")
-        add_library(${yasio_target_name} STATIC
-           ${YASIO_CORE}
-           ${THIRDPART_SRC}
-        )
+        add_library(${yasio_target_name} STATIC ${YASIO_SOURCES})
     else ()
         # set(CMAKE_OSX_ARCHITECTURES "$(ARCHS_STANDARD_64_BIT)")
         if (BUILD_SHARED_LIBS)
-            add_library(${yasio_target_name} MODULE
-                ${YASIO_CORE}
-                ${THIRDPART_SRC}
-            )
+            add_library(${yasio_target_name} MODULE ${YASIO_SOURCES})
             set_target_properties (${yasio_target_name} PROPERTIES BUNDLE TRUE )
         else()
-            add_library(${yasio_target_name} STATIC
-                ${YASIO_CORE}
-                ${THIRDPART_SRC}
-            )
+            add_library(${yasio_target_name} STATIC ${YASIO_SOURCES})
         endif()
     endif ()
 elseif ("${CMAKE_SYSTEM_NAME}" STREQUAL "Switch")
-    add_library(${yasio_target_name} STATIC
-        ${YASIO_CORE}
-        ${THIRDPART_SRC}
-    )
+    add_library(${yasio_target_name} STATIC ${YASIO_SOURCES})
     target_compile_options(${yasio_target_name} PRIVATE -m64 -mcpu=cortex-a57+fp+simd+crypto+crc -fno-common -fno-short-enums -ffunction-sections -fdata-sections -fPIC -fms-extensions)
 else ( ) # linux/win32/android
-    add_library(${yasio_target_name}
-        ${YASIO_CORE}
-        ${THIRDPART_SRC}
-    )
+    add_library(${yasio_target_name} ${YASIO_SOURCES})
 endif ( )
 
-if ( WIN32 )
-    target_link_libraries(${yasio_target_name}
-        ws2_32
-        ${THIRDPART_LIB} 
-    )
-else ( )
-    target_link_libraries(${yasio_target_name}
-        m
-        ${THIRDPART_LIB} 
-    )
-endif ( )
+target_link_libraries(${yasio_target_name} ${YASIO_EXTERN_LIBS})
 
 message(STATUS "YASIO_INC_DIRS=${YASIO_INC_DIRS}")
 target_include_directories(${yasio_target_name} PUBLIC ${YASIO_INC_DIRS})
@@ -426,7 +393,7 @@ if(YASIO_ENABLE_LUA)
     endif()
 endif()
 
-# link libraries for yasio_core when BUILD_SHARED_LIBS=TRUE
+# link libraries for yasio_SOURCES when BUILD_SHARED_LIBS=TRUE
 yasio_link_ssl_libraries(${yasio_target_name})
 if(BUILD_SHARED_LIBS)
     if(NOT WIN32 AND (NOT ANDROID))
