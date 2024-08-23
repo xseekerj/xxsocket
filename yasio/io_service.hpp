@@ -778,7 +778,7 @@ protected:
 
   bool is_valid() const { return ctx_ != nullptr; }
 
-  char buffer_[yasio__max_rcvbuf]; // recv buffer, 64K
+  yasio::sbyte_buffer buffer_{static_cast<size_t>(yasio__max_rcvbuf)};
   int offset_ = 0;                 // recv buffer offset
 
   int expected_size_ = -1;

@@ -376,7 +376,7 @@ int io_transport::write(io_send_buffer&& buffer, completion_cb_t&& handler)
   get_service().wakeup();
   return n;
 }
-int io_transport::do_read(int revent, int& error, highp_time_t&) { return this->call_read(buffer_ + offset_, sizeof(buffer_) - offset_, revent, error); }
+int io_transport::do_read(int revent, int& error, highp_time_t&) { return this->call_read(buffer_.data() + offset_, static_cast<int>(buffer_.size() - offset_), revent, error); }
 bool io_transport::do_write(highp_time_t& wait_duration)
 {
   bool ret = false;
@@ -728,7 +728,14 @@ int io_transport_kcp::do_read(int revent, int& error, highp_time_t& wait_duratio
     this->handle_input(rawbuf_.data(), n, error, wait_duration);
   if (!error)
   { // !important, should always try to call ikcp_recv when no error occured.
-    n = ::ikcp_recv(kcp_, buffer_ + offset_, sizeof(buffer_) - offset_);
+    auto kdata_size = ::ikcp_peeksize(kcp_);
+    if (kdata_size > 0)
+    {
+      auto need_size = static_cast<size_t>(kdata_size + offset_);
+      if (buffer_.size() < need_size)
+        buffer_.resize(kdata_size + offset_);
+      n = ::ikcp_recv(kcp_, buffer_.data() + offset_, kdata_size);
+    }
     if (n > 0) // If got data from kcp, don't wait
       wait_duration = 0;
     else if (n < 0)
@@ -1767,7 +1774,7 @@ bool io_service::do_read(transport_handle_t transport)
         const int bytes_to_strip = transport->ctx_->uparams_.initial_bytes_to_strip;
         if (transport->expected_size_ == -1)
         { // decode length
-          int length = transport->ctx_->decode_len_(transport->buffer_, transport->offset_ + n);
+          int length = transport->ctx_->decode_len_(transport->buffer_.data(), transport->offset_ + n);
           if (length > 0)
           {
             if (length < bytes_to_strip)
@@ -1793,7 +1800,7 @@ bool io_service::do_read(transport_handle_t transport)
       }
       else if (n > 0)
       { // forward packet, don't perform unpack, it's useful for implement streaming based protocol, like http, websocket and ...
-        this->forward_packet(transport->cindex(), io_packet_view{transport->buffer_, n}, transport);
+        this->forward_packet(transport->cindex(), io_packet_view{transport->buffer_.data(), n}, transport);
       }
     }
     else
@@ -1811,7 +1818,7 @@ void io_service::unpack(transport_handle_t transport, int bytes_want /*want cons
   auto& offset         = transport->offset_;
   auto bytes_available = bytes_transferred + offset;
   auto& pkt            = transport->expected_packet_;
-  pkt.insert(pkt.end(), transport->buffer_ + bytes_to_strip, transport->buffer_ + (std::min)(bytes_want, bytes_available));
+  pkt.insert(pkt.end(), transport->buffer_.data() + bytes_to_strip, transport->buffer_.data() + (std::min)(bytes_want, bytes_available));
 
   // set 'offset' to bytes of remain buffer
   offset = bytes_available - bytes_want;
@@ -1819,7 +1826,7 @@ void io_service::unpack(transport_handle_t transport, int bytes_want /*want cons
   { /* pdu received properly */
     if (offset > 0)
     { /* move remain data to head of buffer and hold 'offset'. */
-      ::memmove(transport->buffer_, transport->buffer_ + bytes_want, offset);
+      ::memmove(transport->buffer_.data(), transport->buffer_.data() + bytes_want, offset);
       this->wait_duration_ = 0;
     }
     // move properly pdu to ready queue, the other thread who care about will retrieve it.

@@ -210,9 +210,8 @@ $manifest = @{
     cmdlinetools = '7.0+'; # android cmdlinetools
 }
 
-# the default generator of unix targets: linux, osx, ios, android, wasm
+# the default generator requires explicit specified: osx, ios, android, wasm
 $cmake_generators = @{
-    'linux'   = 'Unix Makefiles'
     'android' = 'Ninja'
     'wasm'    = 'Ninja'
     'wasm64'  = 'Ninja'
@@ -251,6 +250,7 @@ $options = @{
     u      = $false # whether delete 1kdist cross-platform prebuilt folder: path/to/_x
     dm     = $false # dump compiler preprocessors
     i      = $false # perform install
+    scope  = 'local'
 }
 
 $optName = $null
@@ -484,6 +484,9 @@ function devtool_url($filename) {
 function version_eq($ver1, $ver2) {
     return $ver1 -eq $ver2
 }
+function version_like($ver1, $ver2) {
+    return $ver1 -like $ver2
+}
 
 # $ver2: accept x.y.z-rc1
 function version_ge($ver1, $ver2) {
@@ -569,6 +572,7 @@ function find_prog($name, $path = $null, $mode = 'ONLY', $cmd = $null, $params =
     $checkVerCond = $null
     $minimalVer = ''
     $preferredVer = ''
+    $wildcardVer = ''
     $requiredVer = $manifest[$name]
     if ($requiredVer) {
         $preferredVer = $null
@@ -585,12 +589,19 @@ function find_prog($name, $path = $null, $mode = 'ONLY', $cmd = $null, $params =
                 $preferredVer = $preferredVer.TrimEnd('+')
                 if ($minimalVer.EndsWith('+')) { $minimalVer = $minimalVer.TrimEnd('+') }
                 $checkVerCond = '$(version_ge $foundVer $minimalVer)'
-            } else {
+            }
+            else {
                 if ($isRange) {
                     $checkVerCond = '$(version_in_range $foundVer $minimalVer $preferredVer)'
                 }
                 else {
-                    $checkVerCond = '$(version_eq $foundVer $preferredVer)'
+                    if (!$preferredVer.Contains('*')) {
+                        $checkVerCond = '$(version_eq $foundVer $preferredVer)'
+                    } else {
+                        $wildcardVer = $preferredVer
+                        $preferredVer = $wildcardVer.TrimEnd('.*')
+                        $checkVerCond = '$(version_like $foundVer $wildcardVer)'
+                    }
                 }
             }
         }
@@ -644,7 +655,6 @@ function find_prog($name, $path = $null, $mode = 'ONLY', $cmd = $null, $params =
     }
     else {
         if ($preferredVer) {
-            # if (!$silent) { $1k.println("Not found $name, needs install: $preferredVer") }
             $found_rets = $null, $preferredVer
         }
         else {
@@ -833,7 +843,7 @@ function setup_ninja() {
 }
 
 # setup cmake
-function setup_cmake($skipOS = $false, $scope = 'local') {
+function setup_cmake($skipOS = $false) {
     $cmake_prog, $cmake_ver = find_prog -name 'cmake'
     if ($cmake_prog -and (!$skipOS -or $cmake_prog.Contains($myRoot))) {
         return $cmake_prog, $cmake_ver
@@ -887,13 +897,15 @@ function setup_cmake($skipOS = $false, $scope = 'local') {
             }
         }
         elseif ($IsLinux) {
-            if ($scope -ne 'global') {
+            if ($option.scope -ne 'global') {
                 $1k.mkdirs($cmake_root)
                 & "$cmake_pkg_path" '--skip-license' '--exclude-subdir' "--prefix=$cmake_root" 1>$null 2>$null
             }
             else {
-                & "$cmake_pkg_path" '--skip-license' '--prefix=/usr/local' 1>$null 2>$null
+                $cmake_bin = '/usr/local/bin'
+                sudo bash "$cmake_pkg_path" '--skip-license' '--prefix=/usr/local' 1>$null 2>$null
             }
+            if (!$?) { Remove-Item $cmake_pkg_path -Force }
         }
 
         $cmake_prog, $_ = find_prog -name 'cmake' -path $cmake_bin -silent $true
@@ -903,6 +915,7 @@ function setup_cmake($skipOS = $false, $scope = 'local') {
 
         $1k.println("Using cmake: $cmake_prog, version: $cmake_ver")
     }
+    
     $1k.addpath($cmake_bin)
     return $cmake_prog, $cmake_ver
 }
@@ -1220,7 +1233,9 @@ function setup_msvc() {
     if (!$cl_prog) {
         if ($VS_INST) {
             Import-Module "$VS_PATH\Common7\Tools\Microsoft.VisualStudio.DevShell.dll"
-            Enter-VsDevShell -VsInstanceId $VS_INST.instanceId -SkipAutomaticLocation -DevCmdArguments "-arch=$target_cpu -host_arch=x64 -no_logo"
+            $dev_cmd_args = "-arch=$target_cpu -host_arch=x64 -no_logo"
+            if (!$manifest['msvc'].EndsWith('+')) { $dev_cmd_args += " -vcvars_ver=$cl_ver" }
+            Enter-VsDevShell -VsInstanceId $VS_INST.instanceId -SkipAutomaticLocation -DevCmdArguments $dev_cmd_args
 
             $cl_prog, $cl_ver = find_prog -name 'msvc' -cmd 'cl' -silent $true -usefv $true
             $1k.println("Using msvc: $cl_prog, version: $cl_ver")
@@ -1560,7 +1575,7 @@ elseif ($Global:is_android) {
     $ninja_prog = setup_ninja
     # ensure ninja in cmake_bin
     if (!(ensure_cmake_ninja $cmake_prog $ninja_prog)) {
-        $cmake_prog, $Script:cmake_ver = setup_cmake -Force
+        $cmake_prog, $Script:cmake_ver = setup_cmake -skipOS $true
         if (!(ensure_cmake_ninja $cmake_prog $ninja_prog)) {
             $1k.println("Ensure ninja in cmake bin directory fail")
         }
@@ -1589,6 +1604,7 @@ elseif ($Global:is_wasm) {
 }
 
 $is_host_target = $Global:is_win32 -or $Global:is_linux -or $Global:is_mac
+$is_host_cpu = $HOST_CPU -eq $TARGET_CPU
 
 if (!$setupOnly) {
     $BUILD_DIR = $null
@@ -1596,7 +1612,11 @@ if (!$setupOnly) {
 
     function resolve_out_dir($prefix) {
         if ($is_host_target) {
-            $out_dir = "${prefix}${TARGET_CPU}"
+            if (!$is_host_cpu) {
+                $out_dir = "${prefix}${TARGET_CPU}"
+            } else {
+                $out_dir = $prefix.TrimEnd("_")
+            }
         }
         else {
             $out_dir = "${prefix}${TARGET_OS}"
@@ -1707,7 +1727,7 @@ if (!$setupOnly) {
                 }
             }
 
-            if (!$cmake_generator -and !$TARGET_OS.StartsWith('win')) {
+            if (!$cmake_generator -and !$TARGET_OS.StartsWith('win') -and $TARGET_OS -ne 'linux') {
                 $cmake_generator = $cmake_generators[$TARGET_OS]
                 if ($null -eq $cmake_generator) {
                     $cmake_generator = if (!$IsWin) { 'Unix Makefiles' } else { 'Ninja' }
