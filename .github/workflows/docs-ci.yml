@@ -1,6 +1,9 @@
 name: docs
 
 on:
+  push:
+    branches: dev
+  pull_request:
   workflow_dispatch:
     # Inputs the workflow accepts.
     inputs:
@@ -10,12 +13,6 @@ on:
         default: '3.39.12:3.39.x'
         # Input has to be provided for the workflow to run
         required: true
-      comment:
-        description: 'Comment only'
-        # Default value if no value is explicitly provided
-        default: ''
-        # Input has to be provided for the workflow to run
-        required: false
 env:
   DOCS_CI: 1
   PYTHON_VERSION: 3.x
