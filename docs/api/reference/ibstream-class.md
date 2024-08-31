@@ -177,7 +177,7 @@ uint8_t值。
 读取指定长度字节数据，无GC。
 
 ```cpp
-cxx17::string_view read_bytes();
+cxx17::string_view read_bytes(int len);
 ```
 
 ### 返回值
