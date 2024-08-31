@@ -174,11 +174,16 @@ uint8_t值。
 
 ## <a name="read_bytes"></a> ibstream_view::read_bytes
 
-读取指定长度字节数据，无GC。
+读取指定长度字节数据视图，此接口无数据拷贝。
 
 ```cpp
-cxx17::string_view read_bytes();
+cxx17::string_view read_bytes(int len);
 ```
+
+### 参数
+
+*len*<br/>
+要读取的字节数。
 
 ### 返回值
 
