@@ -833,9 +833,13 @@ void io_service::handle_stop()
     this->worker_.join();
     if (this->state_ != state::AT_EXITING)
     {
-      // after join if state not AT_EXITING, means worker thread was terminate outside
+      // after join if state not AT_EXITING, means worker thread was terminated externally
       // i.g .net managed exception occurred when invoke c# delegate
-      this->state_ = state::AT_EXITING;
+      YASIO_KLOGW("[core] the worker thread terminated unexpectedly");
+      handle_worker_exit();
+      // clear pending events to prevent dispatch to io event handler due to the handler
+      // has unexpected exception
+      this->events_.clear();
     }
   }
 
@@ -1021,6 +1025,10 @@ void io_service::run()
 
   } while (!this->stop_flag_ || !this->transports_.empty());
 
+  handle_worker_exit();
+}
+void io_service::handle_worker_exit()
+{
 #if defined(YASIO_USE_CARES)
   destroy_ares_channel();
 #endif
@@ -1028,7 +1036,6 @@ void io_service::run()
   cleanup_ssl_context(YSSL_CLIENT);
   cleanup_ssl_context(YSSL_SERVER);
 #endif
-
   this->state_ = io_service::state::AT_EXITING;
 }
 void io_service::process_transports()

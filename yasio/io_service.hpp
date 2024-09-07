@@ -1199,6 +1199,7 @@ private:
 
   YASIO__DECL bool cleanup_channel(io_channel* channel, bool clear_mask = true);
   YASIO__DECL bool cleanup_io(io_base* obj, bool clear_mask = true);
+  YASIO__DECL void handle_worker_exit();
 
   YASIO__DECL void handle_close(transport_handle_t);
 
