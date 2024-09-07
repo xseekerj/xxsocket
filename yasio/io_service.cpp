@@ -834,11 +834,10 @@ void io_service::handle_stop()
     if (this->state_ != state::AT_EXITING)
     {
       // after join if state not AT_EXITING, means worker thread was terminated externally
-      // i.g .net managed exception occurred when invoke c# delegate
+      // i.g .net managed exception occurred when invoke c# delegate and we should clear pending
+      // events to prevent dispatch to io event handler again
       YASIO_KLOGW("[core] the worker thread terminated unexpectedly");
       handle_worker_exit();
-      // clear pending events to prevent dispatch to io event handler due to the handler
-      // has unexpected exception
       this->events_.clear();
     }
   }
