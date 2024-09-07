@@ -376,7 +376,10 @@ int io_transport::write(io_send_buffer&& buffer, completion_cb_t&& handler)
   get_service().wakeup();
   return n;
 }
-int io_transport::do_read(int revent, int& error, highp_time_t&) { return this->call_read(buffer_.data() + offset_, static_cast<int>(buffer_.size() - offset_), revent, error); }
+int io_transport::do_read(int revent, int& error, highp_time_t&)
+{
+  return this->call_read(buffer_.data() + offset_, static_cast<int>(buffer_.size() - offset_), revent, error);
+}
 bool io_transport::do_write(highp_time_t& wait_duration)
 {
   bool ret = false;
@@ -828,6 +831,12 @@ void io_service::handle_stop()
       return;
     }
     this->worker_.join();
+    if (this->state_ != state::AT_EXITING)
+    {
+      // after join if state not AT_EXITING, means worker thread was terminate outside
+      // i.g .net managed exception occurred when invoke c# delegate
+      this->state_ = state::AT_EXITING;
+    }
   }
 
   if (this->state_ != state::AT_EXITING)

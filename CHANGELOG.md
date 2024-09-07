@@ -1,3 +1,8 @@
+yasio-4.3.1
+
+  1. Refining the resource cleanup process for io_service during the handle_stop phase, particularly when a worker thread is terminated externally
+
+  
 yasio-4.3.0
 
   1. Use dynamic buffer for recv
