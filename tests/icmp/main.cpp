@@ -8,10 +8,10 @@
 #include <thread>
 #include "yasio/yasio.hpp"
 
-#define ICMPTEST_PIN_HOST "www.ip138.com"
-#define ICMPTEST_PIN "yasio-4.0.x ping."
-#define ICMPTEST_PIN_LEN (sizeof(ICMPTEST_PIN) - 1)
-#define ICMPTEST_MAX_LEN 64 // max ip packet len
+#define ICMPTEST_DEFAULT_HOST "www.ip138.com"
+#define ICMPTEST_PAYLOAD "yasio-4.3.x ping."
+static const int ICMPTEST_PAYLOAD_LEN     = (sizeof(ICMPTEST_PAYLOAD) - 1);
+static const int ICMPTEST_PAYLOAD_MAX_LEN = ((std::numeric_limits<uint16_t>::max)() - sizeof(yasio::ip_hdr_st) - sizeof(yasio::icmp_hdr_st));
 #define ICMPTEST_ENC_TSC
 
 namespace yasio
@@ -146,30 +146,26 @@ static unsigned short get_identifier()
  */
 class icmp_ping_helper {
 public:
-  icmp_ping_helper()
+  icmp_ping_helper(int payload_size)
   {
-
     xxsocket schk;
     socktype_ = schk.open(AF_INET, SOCK_RAW, IPPROTO_ICMP) ? SOCK_RAW : SOCK_DGRAM;
-
-    ip_total_len_ = static_cast<int>(ip_icmp_hdr_len_ + ICMPTEST_PIN_LEN);
 
 #if defined(ICMPTEST_ENC_TSC)
     if (yasio::time_now() < static_cast<yasio::highp_time_t>((std::numeric_limits<int>::max)() - 86400))
     {
-      ip_total_len_ += sizeof(yasio::icmp::timeval32);
-      enc_tsc_ = true;
+      payload_size = (std::max<int>)(payload_size, static_cast<int>(sizeof(yasio::icmp::timeval32) + ICMPTEST_PAYLOAD_LEN));
+      enc_tsc_     = true;
     }
 #endif
 
-    ip_total_len_ = YASIO_SZ_ALIGN(ip_total_len_, 8);
-
     // !!!Notes: some host router require (ip_total_length % 2 == 0), otherwise will be dropped by router
-    // 48 bytes
-    ip_total_len_ = std::min<size_t>(ip_total_len_, ICMPTEST_MAX_LEN);
+    ip_total_len_ = YASIO_SZ_ALIGN(payload_size + sizeof(yasio::icmp_hdr_st) + sizeof(yasio::ip_hdr_st), 8);
 
     // 20 bytes
     icmp_total_len_ = ip_total_len_ - sizeof(ip_hdr_st);
+
+    icmp_payload_len_ = icmp_total_len_ - sizeof(icmp_hdr_st);
   }
 
   int ping(yasio::io_watcher& watcher, const ip::endpoint& endpoint, const std::chrono::microseconds& wtimeout, ip::endpoint& peer, icmp_hdr_st& reply_hdr,
@@ -182,7 +178,7 @@ public:
       ec = xxsocket::get_last_errno();
       return -1;
     }
-    
+
     static uint16_t s_seqno = 0;
 
     icmp_hdr_st req_hdr = {0};
@@ -207,13 +203,13 @@ public:
       icmp::timeval32 tv{static_cast<int>(tsc / std::micro::den), static_cast<int>(tsc % std::micro::den)};
       icmp_pkt_.write_bytes(&tv, static_cast<int>(sizeof(tv)));
     }
-    icmp_pkt_.write_bytes(ICMPTEST_PIN, ICMPTEST_PIN_LEN);
+    icmp_pkt_.write_bytes(ICMPTEST_PAYLOAD, ICMPTEST_PAYLOAD_LEN);
 
     // fill bytes
     if (icmp_pkt_.length() < icmp_total_len_)
       icmp_pkt_.fill_bytes(static_cast<int>(icmp_total_len_ - icmp_pkt_.length()), 'F');
 
-    // id,sum
+      // id,sum
 #if !defined(__linux__)
     req_hdr.id = get_identifier();
     icmp_checksum(req_hdr, icmp_pkt_.data() + sizeof(icmp_hdr_st), icmp_pkt_.buffer().end());
@@ -235,6 +231,11 @@ public:
     auto icmp_request       = icmp_pkt_.buffer();
     const size_t ip_pkt_len = sizeof(ip_hdr_st) + icmp_request.size();
 
+#if defined(_WIN32)
+    // set sock DF flag
+    s.set_optval(IPPROTO_IP, IP_DONTFRAGMENT, (char)1);
+#endif
+
     int n = s.sendto(icmp_request.data(), static_cast<int>(icmp_request.size()), endpoint);
     if (n < 0 && !xxsocket::not_send_error(ec = xxsocket::get_last_errno()))
       return -1;
@@ -246,18 +247,18 @@ public:
     watcher.mod_event(s.native_handle(), 0, socket_event::read);
     if (ret > 0 && watcher.is_ready(s.native_handle(), socket_event::read))
     {
-      char buf[128];
-      int n = s.recvfrom(buf, sizeof(buf), peer);
+      yasio::byte_buffer buf(ip_total_len_);
+      int n = s.recvfrom(buf.data(), ip_total_len_, peer);
 
-      const char* icmp_raw = nullptr;
+      uint8_t* icmp_raw = nullptr;
       yasio::ibstream_view ibs;
       if (n == ip_pkt_len)
       { // icmp via SOCK_RAW
         // parse ttl and check ip checksum
-        ibs.reset(buf, sizeof(ip_hdr_st));
+        ibs.reset(buf.data(), sizeof(ip_hdr_st));
         ibs.advance(offsetof(ip_hdr_st, TTL));
         ttl         = ibs.read_byte();
-        icmp_raw    = (buf + sizeof(ip_hdr_st));
+        icmp_raw    = (buf.data() + sizeof(ip_hdr_st));
         u_short sum = ip_chksum((uint8_t*)icmp_raw, n - sizeof(ip_hdr_st));
 
         if (sum != 0)
@@ -270,7 +271,7 @@ public:
           ec = yasio::errc::invalid_packet;
           return -1;
         }
-        icmp_raw = buf;
+        icmp_raw = buf.data();
         ttl      = 0;
       }
 
@@ -280,7 +281,7 @@ public:
       uint16_t sum    = ibs.read<uint16_t>();
       reply_hdr.id    = ibs.read<uint16_t>();
       reply_hdr.seqno = ibs.read<int16_t>();
-      icmp_checksum(reply_hdr, buf + sizeof(icmp_hdr_st), buf + n);
+      icmp_checksum(reply_hdr, buf.data() + sizeof(icmp_hdr_st), buf.data() + n);
       if (reply_hdr.type != icmp::icmp_echo_reply)
       {
         ec = icmp::errc::type_mismatch;
@@ -314,22 +315,34 @@ public:
   }
 
   int socktype_;
-
-  static const size_t ip_icmp_hdr_len_ = sizeof(ip_hdr_st) + sizeof(icmp_hdr_st);
-  // !!!Notes: some host router require (ip_total_length % 2 == 0), otherwise will be dropped by router
-  size_t ip_total_len_;
-  size_t icmp_total_len_;
+  int ip_total_len_;
+  int icmp_total_len_;
+  int icmp_payload_len_;
   yasio::obstream icmp_pkt_;
   bool enc_tsc_ = false;
 };
 
 int main(int argc, char** argv)
 {
-  const char* host    = argc > 1 ? argv[1] : ICMPTEST_PIN_HOST;
-  const int max_times = argc > 2 ? atoi(argv[2]) : 4;
+  const char* host = argc > 1 ? argv[1] : ICMPTEST_DEFAULT_HOST;
+  int max_times    = 4;
+  int payload_size = 0; // icmp payload size
+  for (int argi = 2; argi < argc; ++argi)
+  {
+    if (cxx20::ic::iequals(argv[argi], "-c") || cxx20::ic::iequals(argv[argi], "-n"))
+    {
+      if (++argi < argc)
+        max_times = atoi(argv[argi]);
+    }
+    else if (cxx20::ic::iequals(argv[argi], "-s") || cxx20::ic::iequals(argv[argi], "-l"))
+    {
+      if (++argi < argc)
+        payload_size = atoi(argv[argi]);
+    }
+    ++argi;
+  }
 
-  printf("sizeof(intptr_t)=%u, sizeof(wchar_t)=%u, sizeof(long)=%u\n", static_cast<int>(sizeof(intptr_t)), static_cast<int>(sizeof(wchar_t)),
-         static_cast<int>(sizeof(long)));
+  payload_size = yasio::clamp(payload_size, ICMPTEST_PAYLOAD_LEN, ICMPTEST_PAYLOAD_MAX_LEN);
 
   std::vector<ip::endpoint> endpoints;
   xxsocket::resolve(endpoints, host, 0);
@@ -339,11 +352,11 @@ int main(int argc, char** argv)
     return -1;
   }
 
-  icmp_ping_helper helper;
+  icmp_ping_helper helper(payload_size);
 
   const std::string remote_ip = endpoints[0].ip();
 
-  fprintf(stdout, "Ping %s [%s] with %d(%d) bytes of data(%s):\n", host, remote_ip.c_str(), static_cast<int>(helper.icmp_total_len_),
+  fprintf(stdout, "Ping %s [%s] with %d(%d) bytes of data(%s):\n", host, remote_ip.c_str(), static_cast<int>(helper.icmp_payload_len_),
           static_cast<int>(helper.ip_total_len_), helper.socktype_ == SOCK_RAW ? "SOCK_RAW" : "SOCK_DGRAM");
 
   icmp_hdr_st reply_hdr;
