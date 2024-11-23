@@ -77,7 +77,7 @@ void yasioTest()
 
               obs.write_bytes("User-Agent: Mozilla/5.0 (Windows NT 10.0; "
                               "WOW64) AppleWebKit/537.36 (KHTML, like Gecko) "
-                              "Chrome/108.0.5359.125 Safari/537.36\r\n");
+                              "Chrome/131.0.0.0 Safari/537.36\r\n");
               obs.write_bytes("Accept: */*;q=0.8\r\n");
               obs.write_bytes("Connection: Close\r\n\r\n");
 

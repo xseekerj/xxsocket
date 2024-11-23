@@ -1,4 +1,5 @@
--- yasio 4.0.0 demo
+-- yasio 4.3.x demo
+
 local proto = require 'protocol_enc'
 local yasio = require 'yasio' -- constants
 
@@ -159,4 +160,11 @@ if(yasio.loop) then
         end)
 end
 
-return yasio_update
+local function yasio_stop()
+    client:stop()
+    server:stop()
+end
+
+print('yasio - example started, version:' .. yasio.version)
+
+return {update = yasio_update, stop = yasio_stop}

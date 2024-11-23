@@ -13,7 +13,7 @@
 
 #if defined(_WIN32)
 #  include <Windows.h>
-#  pragma comment(lib, "winmm.lib")
+#  include "yasio/wtimer_hres.hpp"
 #endif
 
 int main(int argc, char** argv)
@@ -22,15 +22,8 @@ int main(int argc, char** argv)
   SetConsoleOutputCP(CP_UTF8);
 #endif
 
-#if defined(_WIN32) && WINAPI_FAMILY != WINAPI_FAMILY_APP
-  UINT TARGET_RESOLUTION = 1; // 1 millisecond target resolution
-  TIMECAPS tc;
-  UINT wTimerRes = 0;
-  if (TIMERR_NOERROR == timeGetDevCaps(&tc, sizeof(TIMECAPS)))
-  {
-    wTimerRes = (std::min)((std::max)(tc.wPeriodMin, TARGET_RESOLUTION), tc.wPeriodMax);
-    timeBeginPeriod(wTimerRes);
-  }
+#if defined(_WIN32)
+  yasio::wtimer_hres whres;
 #endif
 
 #if YASIO__HAS_CXX14
@@ -77,16 +70,6 @@ int main(int argc, char** argv)
   {
     std::this_thread::sleep_for(std::chrono::milliseconds(50));
   } while (!update(50.0 / 1000));
-#endif
-
-#if defined(_WIN32) && WINAPI_FAMILY != WINAPI_FAMILY_APP
-  ///////////////////////////////////////////////////////////////////////////
-  /////////////// restoring timer resolution
-  ///////////////////////////////////////////////////////////////////////////
-  if (wTimerRes != 0)
-  {
-    timeEndPeriod(wTimerRes);
-  }
 #endif
   return 0;
 }
