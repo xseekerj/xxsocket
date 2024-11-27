@@ -257,11 +257,31 @@ public:
         // parse ttl and check ip checksum
         ibs.reset(buf.data(), sizeof(ip_hdr_st));
         ibs.advance(offsetof(ip_hdr_st, TTL));
-        ttl         = ibs.read_byte();
-        icmp_raw    = (buf.data() + sizeof(ip_hdr_st));
-        u_short sum = ip_chksum((uint8_t*)icmp_raw, n - sizeof(ip_hdr_st));
+        ttl = ibs.read_byte();
 
-        if (sum != 0)
+        // just illustrate ip sum verify flow: ip_hdr
+        ibs.advance(sizeof(ip_hdr_st::protocol));
+        u_short sum_val = ibs.read<u_short>();
+
+        auto sum_offset     = offsetof(ip_hdr_st, sum);
+        buf[sum_offset]     = 0;
+        buf[sum_offset + 1] = 0;
+        auto sum            = network_to_host(ip_chksum(buf.data(), sizeof(ip_hdr_st)));
+        if (sum != sum_val)
+          return yasio::icmp::checksum_fail; // checksum failed
+
+        // just illustrate icmp sum verify flow: icmp_hdr + icmp_payload
+        icmp_raw = (buf.data() + sizeof(ip_hdr_st));
+        ibs.reset(icmp_raw, n - sizeof(ip_hdr_st));
+        sum_offset = offsetof(icmp_hdr_st, sum);
+        ibs.advance(sum_offset);
+        sum_val = ibs.read<u_short>();
+
+        icmp_raw[sum_offset] = 0;
+        icmp_raw[sum_offset + 1] = 0;
+
+        sum = network_to_host(ip_chksum(icmp_raw, ibs.length()));
+        if (sum != sum_val)
           return yasio::icmp::checksum_fail; // checksum failed
       }
       else
