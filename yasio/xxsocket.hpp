@@ -118,12 +118,13 @@ struct ip_hdr_st {
   dotted_decimal_t dst_ip;
 };
 
+// for tcp/udp chksum only
 struct psd_hdr_st {
   unsigned long src_addr;
   unsigned long dst_addr;
   char mbz;
   char protocol;
-  unsigned short tcp_length;
+  unsigned short length;
 };
 
 struct tcp_hdr_st {
