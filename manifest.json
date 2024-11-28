@@ -1,13 +1,15 @@
 {
   "versions": {
-    "1kdist": "v93"
+    "1kdist": "v95"
   },
   "mirrors": {
     "github": {
+      "host": "github.com",
       "1kdist": "simdsoft/1kiss/releases/download"
     },
     "gitee":
     {
+      "host": "gitee.com",
       "1kdist": "simdsoft/1kiss/releases/download"
     }    
   }

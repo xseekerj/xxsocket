@@ -5,3 +5,5 @@ if ($IsWin) {
 } else {
     $manifest['nasm'] = '2.15.05+'
 }
+
+$manifest['cmake'] = '3.23.0+'
