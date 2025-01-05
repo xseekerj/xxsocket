@@ -234,7 +234,7 @@ public:
   endpoint& operator=(const endpoint& rhs) { return as_is(rhs); }
   endpoint& as_is(const endpoint& rhs)
   {
-    memcpy(this, &rhs, sizeof(rhs));
+    memcpy((void*)this, &rhs, sizeof(rhs));
     return *this;
   }
   endpoint& as_is(const addrinfo* info) { return as_is_raw(info->ai_addr, info->ai_addrlen); }
@@ -373,7 +373,7 @@ public:
 
   endpoint& as_is_raw(const void* ai_addr, size_t ai_addrlen)
   {
-    ::memcpy(this, ai_addr, ai_addrlen);
+    ::memcpy((void*)this, ai_addr, ai_addrlen);
     this->len(ai_addrlen);
     return *this;
   }
